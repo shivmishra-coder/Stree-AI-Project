@@ -1,3 +1,4 @@
+import streamlit as st
 import requests, os, platform, base64, io
 from datetime import datetime
 
@@ -15,8 +16,8 @@ except ImportError:
     _PANDAS = False
 
 # Configuration Keys
-GROQ_KEY   = ""
-TAVILY_KEY = ""
+GROQ_KEY = st.secrets["GROK_KEY"]
+TAVILY_KEY = st.secrets["TAVILY_API_KEY"]
 GROQ_URL   = "https://api.groq.com/openai/v1/chat/completions"
 
 # PRESERVED FEATURE: Palmistry Detection Logic
