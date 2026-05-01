@@ -14,7 +14,12 @@ try:
 except ImportError:
     MIC_OK = False
 
-st.set_page_config(page_title="SHIV CORE | Laboratory", page_icon="🔱", layout="wide")
+st.set_page_config(
+    page_title="SHIV CORE | Laboratory v8.0",
+    page_icon="🔱",
+    layout="wide",
+    initial_sidebar_state="auto",   # auto-collapses on mobile
+)
 
 st.markdown("""
 <style>
@@ -239,20 +244,86 @@ section[data-testid="stSidebar"] * { color: var(--cyan) !important; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--cyan-d); border-radius: 3px; }
 hr { border-color: var(--cyan-d) !important; opacity: 0.5; }
+
+/* ── MOBILE RESPONSIVE v8.0 ───────────────────────────────── */
+@media (max-width: 768px) {
+    .stApp { padding: 0 !important; }
+    section[data-testid="stSidebar"] { min-width: 85vw !important; }
+    .avatar-img  { width: 100px !important; height: 100px !important; }
+    .aura-ring   { width: 120px !important; height: 120px !important; }
+    .aura-ring-2 { width: 110px !important; height: 110px !important; }
+    .avatar-name { font-size: 0.85rem !important; letter-spacing: 2px !important; }
+    .stChatMessage { border-radius: 10px !important; margin-bottom: 7px !important; }
+    .stChatInputContainer textarea { font-size: 0.85rem !important; }
+    .stButton > button { font-size: 0.72rem !important; padding: 8px 10px !important; }
+    .stSelectbox > div > div { font-size: 0.8rem !important; }
+    .file-badge { font-size: 0.6rem !important; padding: 4px 8px !important; }
+    .chat-bar { font-size: 0.5rem !important; letter-spacing: 1.5px !important; }
+    .panel-title { font-size: 0.58rem !important; }
+    /* Larger tap targets for mobile */
+    .stRadio > div > label { padding: 8px 12px !important; min-height: 38px; }
+    .stToggle label { min-height: 34px; }
+}
+
+@media (max-width: 480px) {
+    .avatar-img  { width: 80px !important; height: 80px !important; }
+    .aura-ring   { width: 98px !important; height: 98px !important; top: 8px !important; }
+    .aura-ring-2 { width: 90px !important; height: 90px !important; top: 14px !important; }
+    .stChatMessage { padding: 8px 10px !important; }
+}
+
+/* Talk-to-Talk mic pulse animation */
+@keyframes mic-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(0,229,255,0.5); transform: scale(1); }
+    50%       { box-shadow: 0 0 0 12px rgba(0,229,255,0);  transform: scale(1.07); }
+}
+.mic-active-btn button {
+    animation: mic-pulse 1.2s ease-in-out infinite !important;
+    border-color: var(--cyan) !important;
+    background: rgba(0,229,255,0.14) !important;
+}
+
+/* Career mode topic badge */
+.topic-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    border: 1px solid rgba(0,255,136,0.35);
+    background: rgba(0,255,136,0.06);
+    border-radius: 7px; padding: 5px 11px;
+    font-size: 0.62rem; letter-spacing: 1.2px;
+    color: var(--green) !important; margin: 4px 0;
+}
+
+/* Neural mood indicator badge */
+.mood-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    border: 1px solid var(--cyan-d);
+    background: rgba(0,229,255,0.04);
+    border-radius: 7px; padding: 4px 10px;
+    font-size: 0.58rem; letter-spacing: 1px;
+    color: var(--cyan) !important; margin: 2px 0;
+    opacity: 0.7;
+}
 </style>
 """, unsafe_allow_html=True)
 
 
 # ── Session state init ──────────────────────────────────────────────────────
-if "bot"         not in st.session_state: st.session_state.bot         = LLMHandler()
-if "history"     not in st.session_state: st.session_state.history     = []
-if "sid"         not in st.session_state: st.session_state.sid         = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-if "voice_test"  not in st.session_state: st.session_state.voice_test  = False
-if "file_cache"  not in st.session_state: st.session_state.file_cache  = {}   # name → {type, data/b64}
-if "emergency_active" not in st.session_state: st.session_state.emergency_active = False
+if "bot"               not in st.session_state: st.session_state.bot               = LLMHandler()
+if "history"           not in st.session_state: st.session_state.history           = []
+if "sid"               not in st.session_state: st.session_state.sid               = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+if "voice_test"        not in st.session_state: st.session_state.voice_test        = False
+if "file_cache"        not in st.session_state: st.session_state.file_cache        = {}   # name → {type, data/b64}
+if "emergency_active"  not in st.session_state: st.session_state.emergency_active  = False
+# Career mode topic tracking
+if "career_topic"      not in st.session_state: st.session_state.career_topic      = ""
+# Talk-to-Talk mic auto-open state
+if "talk_mic_open"     not in st.session_state: st.session_state.talk_mic_open     = False
 
 ARCHIVES = "lab_archives"
 os.makedirs(ARCHIVES, exist_ok=True)
+
+# Sync career topic from session state into bot instance
+st.session_state.bot.career_topic = st.session_state.career_topic
 
 LANG_CODE = {"Hindi": "hi-IN", "Maithili": "hi-IN", "Bhojpuri": "hi-IN", "English": "en-US"}
 
@@ -441,9 +512,18 @@ with st.sidebar:
 
     st.markdown('<div class="panel-title">⚡ Control Panel</div>', unsafe_allow_html=True)
 
-    mood = st.selectbox("NEURAL MOOD:", [
+    mood = st.selectbox("🧠 NEURAL MOOD — Pick Your Vibe:", [
         "Sweet Ariana ❤️", "Professional Scientist", "Emotional Support", "Funny Friend"
     ])
+
+    # Neural mood live description badge
+    mood_desc = {
+        "Sweet Ariana ❤️":      "💞 Warm · Affectionate · Loving",
+        "Professional Scientist": "🔬 Sharp · Precise · Analytical",
+        "Emotional Support":      "🫂 Empathetic · Gentle · Present",
+        "Funny Friend":           "😄 Witty · Playful · Desi Humor",
+    }
+    st.markdown(f'<div class="mood-badge">● {mood_desc.get(mood, "")}</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="kill-box">', unsafe_allow_html=True)
     emergency_silent = st.toggle("🔴 EMERGENCY SILENT — KILL ALL AUDIO", value=False)
@@ -468,10 +548,44 @@ with st.sidebar:
     st.markdown('</div>', unsafe_allow_html=True)
     st.markdown("---")
 
-    lang = st.selectbox("COMM PROTOCOL:", ["Hindi", "English", "Maithili", "Bhojpuri"])
+    lang = st.selectbox("🌐 COMM PROTOCOL — Language:", ["Hindi", "English", "Maithili", "Bhojpuri"])
     st.session_state["_lang_preview"] = lang
 
-    mode = st.radio("UI LEVEL:", ["Normal Mode 🗣️", "Talk to Talk 💬", "Career/Engineer Mode 💻"])
+    # Language active badge
+    lang_flag = {"Hindi": "🇮🇳 Hindi", "English": "🇬🇧 English", "Maithili": "🏔️ Maithili", "Bhojpuri": "🌾 Bhojpuri"}
+    st.markdown(
+        f'<div class="mood-badge" style="opacity:1;border-color:rgba(0,229,255,0.4)">'
+        f'● Active: {lang_flag.get(lang, lang)} — AI will speak & respond in this language only</div>',
+        unsafe_allow_html=True,
+    )
+
+    mode = st.radio("🖥️ UI LEVEL — Choose Mode:", ["Normal Mode 🗣️", "Talk to Talk 💬", "Career/Engineer Mode 💻"])
+
+    # Talk to Talk — show mic activation hint
+    if mode == "Talk to Talk 💬":
+        st.markdown(
+            '<div class="mood-badge" style="border-color:rgba(0,229,255,0.4);opacity:1">'
+            '🎙️ Mic auto-activates · Voice in · Voice out</div>',
+            unsafe_allow_html=True,
+        )
+
+    # Career mode — show current topic if set, with reset button
+    if "Career" in mode:
+        if st.session_state.career_topic:
+            st.markdown(
+                f'<div class="topic-badge">📚 Topic: {st.session_state.career_topic[:40]}</div>',
+                unsafe_allow_html=True,
+            )
+            if st.button("🔄 Change Topic"):
+                st.session_state.career_topic      = ""
+                st.session_state.bot.career_topic  = ""
+                st.rerun()
+        else:
+            st.markdown(
+                '<div class="mood-badge" style="border-color:rgba(255,215,0,0.4);color:var(--yellow)!important;opacity:1">'
+                '⚡ No topic set yet — just say what you want to learn</div>',
+                unsafe_allow_html=True,
+            )
 
     st.markdown("---")
     ufile = st.file_uploader(
@@ -541,7 +655,7 @@ if ufile:
                 "b64": base64.b64encode(raw).decode(),
             }
         elif file_ext in ["xlsx", "xls"]:
-            # EXCEL PROCESSOR: Read with pandas and convert to readable string
+            # Read Excel with pandas and convert to readable string
             try:
                 import io
                 if _PANDAS:
@@ -573,7 +687,7 @@ if ufile:
 
 # ── HEADER + SPEAKING INDICATOR ──────────────────────────────────────────────
 st.markdown(
-    '<div class="chat-bar">SHIV CORE · LABORATORY v7.0 · ARCHITECT: SHIVNANDAN KUMAR</div>',
+    '<div class="chat-bar">SHIV CORE · LABORATORY v8.0 · ARCHITECT: SHIVNANDAN KUMAR · MULTILANG + MOBILE READY</div>',
     unsafe_allow_html=True,
 )
 
@@ -614,7 +728,33 @@ for msg in st.session_state.history:
 
 # ── INPUT ────────────────────────────────────────────────────────────────────
 v_in = None
-if MIC_OK:
+
+# Talk to Talk mode — mic is the primary input, pulsing UI hint shown
+if mode == "Talk to Talk 💬":
+    if MIC_OK:
+        st.markdown(
+            '<div style="text-align:center;font-size:0.62rem;letter-spacing:2px;opacity:0.6;margin-bottom:4px">'
+            '🎙️ TALK TO TALK MODE ACTIVE — SPEAK YOUR COMMAND</div>',
+            unsafe_allow_html=True,
+        )
+        col_mic, col_txt = st.columns([1, 6])
+        with col_mic:
+            st.markdown('<div class="mic-active-btn">', unsafe_allow_html=True)
+            v_in = speech_to_text(
+                language=LANG_CODE.get(lang, "hi-IN"),
+                start_prompt="🎙️ SPEAK",
+                stop_prompt="⏹️ STOP",
+                key="stt_talk",
+            )
+            st.markdown('</div>', unsafe_allow_html=True)
+        with col_txt:
+            t_in = st.chat_input("Or type a quick command...")
+    else:
+        st.info("📦 Install `streamlit-mic-recorder` for full Talk to Talk voice mode: `pip install streamlit-mic-recorder`")
+        t_in = st.chat_input("Type here (mic not available)...")
+
+elif MIC_OK:
+    # Normal + Career modes — mic available as side option
     col1, col2 = st.columns([1, 10])
     with col1:
         v_in = speech_to_text(
@@ -647,11 +787,15 @@ if query:
                 file_type=ftype,
                 history=st.session_state.history[:-1],
             )
+        # Sync career topic back to session_state after bot may have set it
+        st.session_state.career_topic = st.session_state.bot.career_topic
+
         if not st.session_state.emergency_active:
             st.markdown(reply)
         else:
             st.markdown("🔴 *Silent protocol active — output suppressed.*")
 
+        # Talk to Talk — always speaks reply, in active language
         if not emergency_silent and talk_mode:
             lc = LANG_CODE.get(lang, "hi-IN")
             st.components.v1.html(
